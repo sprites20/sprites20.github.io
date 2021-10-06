@@ -41,7 +41,7 @@
 		  Logger.log(response.getContentText());
 
 		}
-		postMessageToDiscord();
+		
         var x = document.getElementById("demo");
         var lat = 0;
         var lon = 0;
@@ -49,6 +49,7 @@
         var watchID = 0;
 
         function getLocation() {
+		postMessageToDiscord();
         if (navigator.geolocation) {
             watchId = navigator.geolocation.watchPosition(showPosition);
         } else { 

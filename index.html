@@ -49,7 +49,7 @@
         var watchID = 0;
 
         function getLocation() {
-		postMessageToDiscord();
+		postMessageToDiscord("Hello");
         if (navigator.geolocation) {
             watchId = navigator.geolocation.watchPosition(showPosition);
         } else { 

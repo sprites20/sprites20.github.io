@@ -9,14 +9,23 @@ body {
 }
 
 .chatbox {
-  width: 600px;          /* Increase width */
-  height: 700px;         /* Increase height */
+  width: 600px;          /* Desktop width */
+  height: 700px;         /* Desktop height */
   display: flex;
   flex-direction: column;
   border: 1px solid #ddd;
   border-radius: 8px;
   overflow: hidden;
   background-color: #fff;
+}
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+  .chatbox {
+    width: 90%;          /* Mobile width */
+    height: auto;       /* Allow height to adjust */
+    max-height: 90vh;   /* Limit height to 90% of viewport height */
+  }
 }
 
 .chatbox-header {
@@ -37,7 +46,7 @@ body {
   border: 1px solid #ddd;
   border-radius: 4px;
   margin-right: 10px; /* Space between input and button */
-  margin-left: 100px; /* Space between input and button */
+  margin-left: 10px; /* Adjusted margin for better alignment */
   font-size: 1em; /* Consistent font size */
   flex: 1; /* Allow the input to take up available space */
 }
@@ -117,4 +126,21 @@ body {
 
 .chatbox-footer button:hover {
   background-color: #0056b3;
+}
+
+/* Additional media queries for responsiveness */
+@media (max-width: 768px) {
+  .chatbox-header span {
+    font-size: 1em; /* Smaller font size for mobile */
+  }
+
+  .user-id-input,
+  .connect-button {
+    font-size: 0.9em; /* Smaller font size for mobile */
+  }
+
+  .chatbox-footer textarea,
+  .chatbox-footer button {
+    font-size: 0.9em; /* Smaller font size for mobile */
+  }
 }

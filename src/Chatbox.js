@@ -9,7 +9,8 @@ const Chatbox = () => {
   const [inputUserId, setInputUserId] = useState('user123');
   const [isConnected, setIsConnected] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [uploadedImages, setUploadedImages] = useState([]); // Track uploaded images
+  const [uploadedFileUrl, setUploadedFileUrl] = useState(null); // Store uploaded file URL
+  const [uploading, setUploading] = useState(false); // State to track upload status
   const textareaRef = useRef(null);
   const socket = useRef(null);
 
@@ -18,14 +19,10 @@ const Chatbox = () => {
 
     const fetchNgrokUrlAndConnect = async () => {
       try {
-        // Fetch the ngrok URL from a public GitHub repository
-        const ngrokResponse = await fetch('https://raw.githubusercontent.com/sprites20/Spirit-AGI/refs/heads/main/ngrok-link.json');
+        const ngrokResponse = await fetch('https://raw.githubusercontent.com/sprites20/ngrok-links/refs/heads/main/ngrok-link.json');
         const ngrokData = await ngrokResponse.json();
+        const ngrokUrl = extractNgrokUrl(ngrokData.ngrok_url);
 
-        // Extract the ngrok URL from the data
-        const ngrokUrl = 'http://localhost:5000'//extractNgrokUrl(ngrokData.ngrok_url);
-
-        // Fetch the IP address
         const ipResponse = await fetch('https://api.ipify.org?format=json');
         const ipData = await ipResponse.json();
         const ipAddress = ipData.ip;
@@ -33,14 +30,13 @@ const Chatbox = () => {
         const fullUserId = `${new Date().toISOString()}_${inputUserId}_${ipAddress}`;
         setUserId(fullUserId);
 
-        // Connect to the socket using the ngrok URL fetched from GitHub
         socket.current = io(ngrokUrl, {
           query: { user_id: fullUserId },
+          transports: ['websocket']
         });
 
         setIsConnected(true);
 
-        // Listen for server responses
         socket.current.on('server_response', (data) => {
           console.log('Received from server:', data);
           setMessages((prevMessages) => [...prevMessages, data]);
@@ -54,24 +50,13 @@ const Chatbox = () => {
     fetchNgrokUrlAndConnect();
   };
 
-  // Function to extract the ngrok URL
   const extractNgrokUrl = (ngrokTunnelString) => {
-    // Use regex to match the URL in the NgrokTunnel string
     const match = ngrokTunnelString.match(/https?:\/\/[^\s]+/);
-
     if (match) {
-      let url = match[0]; // Get the first matched URL
-
-      // Remove the last character if it's a quotation mark
-      if (url.endsWith('"')) {
-        url = url.slice(0, -1); // Remove the last character
-      }
-
-      return url; // Return the cleaned URL
-    } else {
-      console.error('No valid ngrok URL found in the response.');
-      return null; // Or throw an error, depending on your preference
+      return match[0].replace(/"$/, ''); // Remove any trailing quote
     }
+    console.error('No valid ngrok URL found in the response.');
+    return null;
   };
 
   useEffect(() => {
@@ -83,7 +68,7 @@ const Chatbox = () => {
   }, []);
 
   const handleSendMessage = async () => {
-    if (newMessage.trim() === '') return;
+    if (newMessage.trim() === '' && !uploadedFileUrl) return; // Don't send if there's no text or file URL
     if (!isConnected) {
       alert('Please connect to the server first!');
       return;
@@ -91,37 +76,19 @@ const Chatbox = () => {
 
     const messageToSend = {
       text: newMessage,
-      image: selectedFile ? `${socket.current.io.uri}/uploads/${selectedFile.name}` : null,
+      image: uploadedFileUrl, // Use the uploaded file URL if available
       sender: userId,
     };
 
+    // Add the message with the image URL to the chat
     setMessages((prevMessages) => [...prevMessages, messageToSend]);
 
-    // Emit the message with the image URL to the server
+    // Emit the message to the server
     socket.current.emit('client_event', messageToSend);
 
-    if (selectedFile) {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('user_id', userId);
-
-      try {
-        const response = await fetch(`${socket.current.io.uri}/upload`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (response.ok) {
-          setSelectedFile(null);
-        } else {
-          console.error('Error uploading file:', await response.json());
-        }
-      } catch (error) {
-        console.error('File upload failed:', error);
-      }
-    }
-
+    // Reset the message and file state after sending
     setNewMessage(''); // Clear the input field
+    setUploadedFileUrl(null); // Reset uploaded file URL
     textareaRef.current.style.height = 'auto'; // Reset height
   };
 
@@ -135,12 +102,14 @@ const Chatbox = () => {
       return;
     }
 
+    setUploading(true); // Set uploading state to true
+
     const formData = new FormData();
     formData.append('file', selectedFile);
     formData.append('user_id', userId);
 
     try {
-      const response = await fetch(`${socket.current.io.uri}/upload`, { // Use backticks for template literals
+      const response = await fetch(`${socket.current.io.uri}/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -148,23 +117,21 @@ const Chatbox = () => {
       const result = await response.json();
       if (response.ok) {
         console.log('File upload response:', result);
-        alert(`File uploaded successfully: ${selectedFile.name}`);
 
-        // Add the image URL to the messages
-        setUploadedImages((prev) => [...prev, result.file_url]); // Track uploaded images
+        // Store the uploaded file URL
+        setUploadedFileUrl(result.file_url);
+
+        alert(`File uploaded successfully: ${selectedFile.name}`);
       } else {
         console.error('Error uploading file:', result.error);
       }
     } catch (error) {
       console.error('File upload failed:', error);
+    } finally {
+      setUploading(false); // Reset uploading state
+      setSelectedFile(null); // Clear the selected file
     }
   };
-
-  useEffect(() => {
-    if (uploadedImages.length > 0) {
-      console.log('Uploaded images:', uploadedImages);
-    }
-  }, [uploadedImages]); // Log when the image URL changes
 
   return (
     <div className="chatbox">
@@ -188,13 +155,15 @@ const Chatbox = () => {
             const senderParts = message.sender.split('_'); // Split the sender string
             const username = senderParts[1]; // Extract the username (user ID) after timestamp
 
+            console.log('Image URL:', message.image); // Log the image URL for debugging
+
             return (
               <div key={index} className="message">
                 <div><strong>{username}</strong>: {message.text}</div> {/* Display just the username */}
                 {message.image && (
                   <img
-                    src={message.image}
-                    alt="Uploaded"
+                    src={message.image} // Directly use the image URL
+                    alt={"Uploaded image: " + message.image}
                     className="uploaded-image"
                     style={{ width: '500px', height: 'auto', borderRadius: '5px' }}
                   />
@@ -225,7 +194,9 @@ const Chatbox = () => {
           onChange={handleFileChange}
           style={{ marginLeft: '10px' }}
         />
-        <button onClick={handleFileUpload}>Upload File</button>
+        <button onClick={handleFileUpload} disabled={uploading}>
+          {uploading ? 'Uploading...' : 'Upload File'}
+        </button>
       </div>
     </div>
   );

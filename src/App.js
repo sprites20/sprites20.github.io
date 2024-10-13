@@ -8,7 +8,6 @@ function App() {
     <div className="App">
       <div className="main-container">
         <Chatbox />
-        <SideBox />
       </div>
     </div>
   );
